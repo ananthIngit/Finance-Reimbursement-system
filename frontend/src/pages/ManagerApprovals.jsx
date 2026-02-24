@@ -11,7 +11,6 @@ const ManagerApprovals = () => {
   // 1. Determine "Mode" based on URL
   const searchParams = new URLSearchParams(location.search);
   const tabParam = searchParams.get('tab');
-  // Default to 'pending' if no tab is specified
   const mode = tabParam || 'pending'; 
 
   // 2. Fetch Team Expenses
@@ -57,13 +56,11 @@ const ManagerApprovals = () => {
       return e.status === 'Pending';
     }
     if (mode === 'approved') {
-      // Show Approved AND Reimbursed (since Reimbursed is technically approved)
       return e.status === 'Approved' || e.status === 'Reimbursed';
     }
     if (mode === 'rejected') {
       return e.status === 'Rejected';
     }
-    // 'history' mode: Show everything that is NOT pending
     return e.status !== 'Pending'; 
   });
 
@@ -75,112 +72,130 @@ const ManagerApprovals = () => {
     return 'Full Approval History';
   };
 
-  // Helper for status badge colors
+  // Helper for status badge colors (Adapted for Dark Mode)
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Approved': return 'bg-green-100 text-green-800';
-      case 'Rejected': return 'bg-red-100 text-red-800';
-      case 'Reimbursed': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'Approved': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+      case 'Rejected': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+      case 'Reimbursed': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
+    // Main Container
+    <div className="min-h-screen p-8 transition-colors duration-300 bg-gray-100 dark:bg-gray-900">
+      
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <button 
             onClick={() => navigate('/manager-dashboard')}
-            className="text-gray-600 hover:text-gray-900 font-medium text-sm mb-1 block"
+            className="font-medium text-sm mb-1 block transition-colors
+                       text-gray-600 hover:text-gray-900 
+                       dark:text-gray-400 dark:hover:text-gray-200"
           >
             ← Back to Dashboard
           </button>
           
-          <h1 className="text-3xl font-bold text-gray-800">
+          <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
             {getPageTitle()}
           </h1>
         </div>
       </div>
 
       {/* CONTENT AREA */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="rounded-lg shadow overflow-hidden transition-colors duration-300 bg-white dark:bg-gray-800">
         {loading ? (
-          <p className="p-10 text-center text-gray-500">Loading...</p>
+          <p className="p-10 text-center text-gray-500 dark:text-gray-400">Loading...</p>
         ) : (
           <>
             {filteredExpenses.length === 0 ? (
               <div className="p-10 text-center">
-                <p className="text-gray-500 text-lg">No expenses found.</p>
-                {mode === 'pending' && <p className="text-gray-400">All caught up! 🎉</p>}
+                <p className="text-lg text-gray-500 dark:text-gray-400">No expenses found.</p>
+                {mode === 'pending' && <p className="text-gray-400 dark:text-gray-500">All caught up! 🎉</p>}
               </div>
             ) : (
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className={mode === 'pending' ? 'bg-yellow-50' : 'bg-gray-50'}>
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                    
-                    {/* Columns change based on Mode */}
-                    {mode === 'pending' ? (
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    ) : (
-                      <>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Remarks</th>
-                      </>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredExpenses.map((expense) => (
-                    <tr key={expense.id}>
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">{expense.employee_name}</div>
-                        <div className="text-xs text-gray-500">{new Date(expense.date_incurred).toLocaleDateString()}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">{expense.title}</div>
-                        <div className="text-xs text-gray-500">{expense.category_name}</div>
-                        {expense.receipt && (
-                          <a href={expense.receipt} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline block mt-1">View Receipt</a>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm font-bold text-gray-900">${expense.amount}</td>
-
-                      {/* RENDER ACTIONS OR STATUS BADGE */}
-                      {mode === 'pending' ? (
-                        <td className="px-6 py-4 text-center">
-                          <button 
-                            onClick={() => handleAction(expense.id, 'Approved')} 
-                            className="bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200 mr-2 text-xs font-bold shadow-sm transition"
-                          >
-                            ✔ Approve
-                          </button>
-                          <button 
-                            onClick={() => handleAction(expense.id, 'Rejected')} 
-                            className="bg-red-100 text-red-700 px-3 py-1 rounded-full hover:bg-red-200 text-xs font-bold shadow-sm transition"
-                          >
-                            ✖ Reject
-                          </button>
-                        </td>
-                      ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead className={
+                        mode === 'pending' 
+                        ? 'bg-yellow-50 dark:bg-yellow-900/20' 
+                        : 'bg-gray-50 dark:bg-gray-700'
+                    }>
+                    <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Employee</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Details</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Amount</th>
+                        
+                        {/* Columns change based on Mode */}
+                        {mode === 'pending' ? (
+                        <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
+                        ) : (
                         <>
-                          <td className="px-6 py-4">
-                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(expense.status)}`}>
-                              {expense.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-500 italic">
-                             {expense.remarks || "-"}
-                          </td>
+                            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Remarks</th>
                         </>
-                      )}
+                        )}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                    {filteredExpenses.map((expense) => (
+                        <tr key={expense.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td className="px-6 py-4">
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{expense.employee_name}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">{new Date(expense.created_at).toLocaleDateString()}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900 dark:text-gray-100">{expense.description}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">{expense.category_name}</div>
+                            {expense.receipt && (
+                            <a href={expense.receipt} target="_blank" rel="noopener noreferrer" className="text-xs font-medium block mt-1 text-blue-600 hover:underline dark:text-blue-400">
+                                View Receipt
+                            </a>
+                            )}
+                        </td>
+                        <td className="px-6 py-4 text-sm font-bold text-gray-900 dark:text-gray-100">${expense.amount}</td>
+
+                        {/* RENDER ACTIONS OR STATUS BADGE */}
+                        {mode === 'pending' ? (
+                            <td className="px-6 py-4 text-center">
+                            <div className="flex justify-center gap-2">
+                                <button 
+                                    onClick={() => handleAction(expense.id, 'Approved')} 
+                                    className="px-3 py-1 rounded-full text-xs font-bold shadow-sm transition
+                                            bg-green-100 text-green-700 hover:bg-green-200 
+                                            dark:bg-green-900/40 dark:text-green-400 dark:hover:bg-green-900/60"
+                                >
+                                    ✔ Approve
+                                </button>
+                                <button 
+                                    onClick={() => handleAction(expense.id, 'Rejected')} 
+                                    className="px-3 py-1 rounded-full text-xs font-bold shadow-sm transition
+                                            bg-red-100 text-red-700 hover:bg-red-200 
+                                            dark:bg-red-900/40 dark:text-red-400 dark:hover:bg-red-900/60"
+                                >
+                                    ✖ Reject
+                                </button>
+                            </div>
+                            </td>
+                        ) : (
+                            <>
+                            <td className="px-6 py-4">
+                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(expense.status)}`}>
+                                {expense.status}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm italic text-gray-500 dark:text-gray-400">
+                                {expense.remarks || "-"}
+                            </td>
+                            </>
+                        )}
+                        </tr>
+                    ))}
+                    </tbody>
+                </table>
+              </div>
             )}
           </>
         )}

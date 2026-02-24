@@ -4,75 +4,53 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth import get_user_model
 from django.db.models import Q, Count, Sum 
 from rest_framework.exceptions import ValidationError 
-
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from django.db.models.functions import TruncMonth
-
-from .utils import send_status_update_email
-
 import openpyxl
 from django.http import HttpResponse
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 
-from .models import (
-    Expense, 
-    ApprovalLog, 
-    Category, 
-    RolePermission, 
-    Permission
-)
+# Import local modules
+from .utils import send_status_update_email, send_password_reset_email
+from .models import Expense, ApprovalLog, Category, RolePermission, Permission
 from .permissions import IsManager, IsFinance
 from .serializers import (
-    UserRegistrationSerializer, 
-    ExpenseSerializer, 
-    CategorySerializer,
-    CustomTokenObtainPairSerializer,
-    UserProfileSerializer,
-    ChangeUsernameSerializer,   
-    ChangeProfilePicSerializer,
-    ChangePasswordSerializer,
-    ExpenseActionSerializer  
+    UserRegistrationSerializer, ExpenseSerializer, CategorySerializer,
+    CustomTokenObtainPairSerializer, UserProfileSerializer,
+    ChangeUsernameSerializer, ChangeProfilePicSerializer,
+    ChangePasswordSerializer, ExpenseActionSerializer,
+    PasswordResetRequestSerializer, SetNewPasswordSerializer        
 )
 
 User = get_user_model()
 
+# ==========================
+# 1. Authentication Views
+# ==========================
 
 class CustomLoginView(TokenObtainPairView):
-    """
-    POST: Login with username/password.
-    Returns: Access Token, Refresh Token, User ID, Role.
-    """
     serializer_class = CustomTokenObtainPairSerializer
 
-
-class RegisterView(generics.CreateAPIView): 
-    """
-    Endpoint for new users to register.
-    Permission: AllowAny (Public)
-    """
+class RegisterView(generics.CreateAPIView):
     serializer_class = UserRegistrationSerializer
     permission_classes = [permissions.AllowAny]
 
+# ==========================
+# 2. Expense Management
+# ==========================
 
 class CategoryListView(generics.ListAPIView):
-    """
-    Helper endpoint to get list of categories (for dropdowns).
-    """
     queryset = Category.objects.filter(is_active=True)
     serializer_class = CategorySerializer
     permission_classes = [permissions.IsAuthenticated]
 
-
 class MyExpenseListView(generics.ListCreateAPIView):
-    """
-    GET: List ONLY my own expenses.
-    POST: Submit a new expense.
-    """
     serializer_class = ExpenseSerializer
     permission_classes = [permissions.IsAuthenticated]
-
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'category']
     search_fields = ['description', 'amount']
@@ -84,12 +62,7 @@ class MyExpenseListView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(employee=self.request.user)
 
-
 class MyExpenseDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """ 
-    GET: View details.
-    PUT/DELETE: Only if Pending.
-    """
     serializer_class = ExpenseSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -99,58 +72,43 @@ class MyExpenseDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         instance = self.get_object()
         if instance.status != 'Pending':
-            raise ValidationError(
-                {"error": "You cannot edit an expense that has already been processed."}
-            )
+            raise ValidationError({"error": "You cannot edit an expense that has already been processed."})
         serializer.save()
 
     def perform_destroy(self, instance):
-        instance = self.get_object() # Safety check to ensure we get the object first
         if instance.status != 'Pending':
-            raise ValidationError(
-                {"error": "You cannot delete an expense that has already been processed."}
-            )
+            raise ValidationError({"error": "You cannot delete an expense that has already been processed."})
         instance.delete()
 
+# ==========================
+# 3. Manager & Finance Logic (FIXED VISIBILITY)
+# ==========================
 
 class TeamExpenseListView(generics.ListAPIView):
     """
-    GET: List expenses of users who report to ME (the Manager).
+    GET: List expenses for the Manager's department.
     """
     serializer_class = ExpenseSerializer
     permission_classes = [permissions.IsAuthenticated, IsManager]
-
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'employee'] 
+    filterset_fields = ['status']
     search_fields = ['description', 'employee__username']
 
     def get_queryset(self):
-        return Expense.objects.filter(employee__manager=self.request.user).order_by('-created_at')
-
+        # 👇 FIX: Filter by department to ensure Manager sees their team
+        user = self.request.user
+        return Expense.objects.filter(
+            employee__department=user.department
+        ).exclude(employee=user).order_by('-created_at')
 
 class FinanceQueueView(generics.ListAPIView):
-    """
-    Dashboard for Finance.
-    GET: List ALL expenses that are 'Approved' and waiting for Reimbursement.
-    """
     serializer_class = ExpenseSerializer
     permission_classes = [permissions.IsAuthenticated, IsFinance]
     
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['category', 'employee'] 
-    search_fields = ['description', 'employee__username']
-
     def get_queryset(self):
         return Expense.objects.filter(status='Approved').order_by('created_at')
 
-
 class ApproveRejectView(views.APIView):
-    """
-    POST: Change status of an expense.
-    - Managers: Pending -> Approved / Rejected
-    - Finance: Approved -> Reimbursed
-    - TRIGGERS EMAIL NOTIFICATION ON SAVE
-    """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, pk):
@@ -163,281 +121,171 @@ class ApproveRejectView(views.APIView):
         if serializer.is_valid():
             action = serializer.validated_data['action']
             remarks = serializer.validated_data.get('remarks', '')
-            
             user_role = request.user.role.name if request.user.role else ""
 
             if action in ['Approved', 'Rejected']:
                 if expense.status != 'Pending':
-                    return Response(
-                        {"error": f"Cannot {action} this expense. Current status is {expense.status}."}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                
+                    return Response({"error": "Already processed"}, status=400)
                 if user_role != 'Manager': 
-                    return Response(
-                        {"error": "Access Denied: Only Managers can Approve/Reject."}, 
-                        status=status.HTTP_403_FORBIDDEN
-                    )
+                    return Response({"error": "Only Managers can approve"}, status=403)
 
             elif action == 'Reimbursed':
                 if expense.status != 'Approved':
-                    return Response(
-                        {"error": "Cannot Reimburse. Expense must be 'Approved' first."}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                
+                    return Response({"error": "Must be approved first"}, status=400)
                 if user_role != 'Finance':
-                    return Response(
-                        {"error": "Access Denied: Only Finance can Reimburse."}, 
-                        status=status.HTTP_403_FORBIDDEN
-                    )
+                    return Response({"error": "Only Finance can reimburse"}, status=403)
 
-            
             expense.status = action
             expense.save()
         
             ApprovalLog.objects.create(
-                expense=expense,
-                reviewer=request.user,
-                new_status=action,
-                remarks=remarks
+                expense=expense, reviewer=request.user,
+                new_status=action, remarks=remarks
             )
-
-          
             try:
                 send_status_update_email(expense)
-            except Exception as e:
-                
-                print(f"⚠️ Email failed to send: {e}")
-
+            except:
+                pass
             return Response({"message": f"Expense marked as {action}", "status": action})
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=400)
 
+# ==========================
+# 4. Dashboards (FIXED STATS)
+# ==========================
 
-class MyProfileView(generics.RetrieveUpdateAPIView):    
-    """
-    GET: View own profile.
-    PUT/PATCH: Update own profile.
-    """
+class EmployeeDashboardView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        queryset = Expense.objects.filter(employee=request.user)
+        stats = queryset.aggregate(
+            total_pending=Count('id', filter=Q(status='Pending')),
+            total_approved=Count('id', filter=Q(status__in=['Approved', 'Reimbursed'])),
+            total_rejected=Count('id', filter=Q(status='Rejected')),
+            total_amount_claimed=Sum('amount', filter=Q(status='Reimbursed'))
+        )
+        stats['total_amount_claimed'] = stats['total_amount_claimed'] or 0
+        return Response(stats)
+
+class ManagerDashboardView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsManager]
+
+    def get(self, request):
+        # 👇 FIX: Stats based on Department
+        team_expenses = Expense.objects.filter(
+            employee__department=request.user.department
+        ).exclude(employee=request.user)
+
+        stats = team_expenses.aggregate(
+            pending_approvals=Count('id', filter=Q(status='Pending')),
+            total_approved=Count('id', filter=Q(status__in=['Approved', 'Reimbursed'])),
+            total_rejected=Count('id', filter=Q(status='Rejected')),
+            department_spend=Sum('amount', filter=Q(status='Reimbursed'))
+        )
+        stats['department_spend'] = stats['department_spend'] or 0
+        return Response(stats)
+
+class FinanceDashboardView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsFinance]
+
+    def get(self, request):
+        # Summary for Finance Cards
+        all_expenses = Expense.objects.all()
+        stats = {
+            "pending_payment": all_expenses.filter(status='Approved').count(),
+            "total_paid": all_expenses.filter(status='Reimbursed').count(),
+            "total_payout": all_expenses.filter(status='Reimbursed').aggregate(Sum('amount'))['amount__sum'] or 0
+        }
+        return Response(stats)
+
+# ==========================
+# 5. Profile, Password Reset & Export
+# ==========================
+
+class MyProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = UserProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
-    
     parser_classes = [MultiPartParser, FormParser, JSONParser] 
-
-    def get_object(self):
-        return self.request.user
-
+    def get_object(self): return self.request.user
 
 class ChangeUsernameView(generics.UpdateAPIView):
     serializer_class = ChangeUsernameSerializer
     permission_classes = [permissions.IsAuthenticated]
-
-    def get_object(self):
-        return self.request.user
-
+    def get_object(self): return self.request.user
 
 class ChangeProfilePicView(generics.UpdateAPIView):
     serializer_class = ChangeProfilePicSerializer
     permission_classes = [permissions.IsAuthenticated]
-
-    def get_object(self):
-        return self.request.user
-
+    def get_object(self): return self.request.user
 
 class ChangePasswordView(generics.UpdateAPIView):
     serializer_class = ChangePasswordSerializer
     permission_classes = [permissions.IsAuthenticated]
-
-    def get_object(self):
-        return self.request.user
-
+    def get_object(self): return self.request.user
     def update(self, request, *args, **kwargs):
         user = self.get_object()
         serializer = self.get_serializer(data=request.data, context={'request': request})
-
         if serializer.is_valid():
             user.set_password(serializer.validated_data['new_password'])
             user.save()
-            return Response({"message": "Password updated successfully."}, status=status.HTTP_200_OK)
+            return Response({"message": "Password updated"}, status=200)
+        return Response(serializer.errors, status=400)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class ExportExpensesView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsFinance]
+    def get(self, request):
+        status_filter = request.query_params.get('status')
+        queryset = Expense.objects.all().order_by('-created_at')
+        if status_filter: queryset = queryset.filter(status=status_filter)
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["ID", "Employee", "Category", "Amount", "Status", "Date"])
+        for exp in queryset:
+            ws.append([exp.id, exp.employee.username, exp.category.name, exp.amount, exp.status, exp.created_at.replace(tzinfo=None)])
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="expenses.xlsx"'
+        wb.save(response)
+        return response
 
+class RequestPasswordResetView(generics.GenericAPIView):
+    serializer_class = PasswordResetRequestSerializer
+    permission_classes = [permissions.AllowAny]
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            email = request.data['email']
+            user = User.objects.filter(email=email).first()
+            if user: send_password_reset_email(user)
+            return Response({'message': 'Reset link sent if account exists'}, status=200)
+        return Response(serializer.errors, status=400)
+
+class PasswordTokenCheckView(generics.GenericAPIView):
+    permission_classes = [permissions.AllowAny]
+    def get(self, request, uidb64, token):
+        try:
+            id = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(id=id)
+            if not PasswordResetTokenGenerator().check_token(user, token):
+                return Response({'error': 'Invalid token'}, status=400)
+            return Response({'success': True}, status=200)
+        except:
+            return Response({'error': 'Invalid token'}, status=400)
+
+class SetNewPasswordView(generics.GenericAPIView):
+    serializer_class = SetNewPasswordSerializer
+    permission_classes = [permissions.AllowAny]
+    def patch(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'message': 'Success'}, status=200)
 
 class DeleteUserView(generics.DestroyAPIView):
     queryset = User.objects.all()
     permission_classes = [permissions.IsAuthenticated]
-
     def delete(self, request, *args, **kwargs):
-        try:
-            target_perm = Permission.objects.get(slug='delete_user')
-        except Permission.DoesNotExist:
-            return Response(
-                {"error": "System Error: Permission 'delete_user' not found."}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-        has_access = RolePermission.objects.filter(
-            role=request.user.role,
-            permission=target_perm
-        ).exists()
-
-        if not has_access:
-            return Response(
-                {"error": "Access Denied: You do not have permission to delete users."}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         instance = self.get_object()
-
-        if instance == request.user:
-            return Response(
-                {"error": "You cannot deactivate your own account."}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if instance == request.user: return Response({"error": "Cannot delete self"}, status=400)
         instance.is_active = False 
         instance.save()
-
-        return Response(
-            {"message": f"User '{instance.username}' has been deactivated successfully."}, 
-            status=status.HTTP_200_OK
-        )
-
-
-class EmployeeDashboardView(views.APIView):
-    """
-    GET: Returns stats for the logged-in employee.
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        
-        queryset = Expense.objects.filter(employee=request.user)
-        
-        stats = queryset.aggregate(
-            total_pending=Count('id', filter=Q(status='Pending')),
-            
-            total_approved=Count('id', filter=Q(status__in=['Approved', 'Reimbursed'])),
-            
-            total_rejected=Count('id', filter=Q(status='Rejected')),
-            total_reimbursed=Count('id', filter=Q(status='Reimbursed')),
-            
-            total_amount_claimed=Sum('amount', filter=~Q(status='Rejected'))
-        )
-
-        if stats['total_amount_claimed'] is None:
-            stats['total_amount_claimed'] = 0
-
-        return Response(stats)
-
-
-class ManagerDashboardView(views.APIView):
-    """
-    GET: Returns stats for a Manager's team.
-    """
-    permission_classes = [permissions.IsAuthenticated, IsManager]
-
-    def get(self, request):
-        # 1. Get all expenses for this manager's team
-        team_expenses = Expense.objects.filter(employee__manager=request.user)
-
-        # 2. Calculate Stats
-        stats = team_expenses.aggregate(
-            # Frontend expects 'pending_approvals', so we name it that (was pending_reviews)
-            pending_approvals=Count('id', filter=Q(status='Pending')),
-            
-            # Count Approved AND Reimbursed as "Team Approved"
-            total_approved=Count('id', filter=Q(status__in=['Approved', 'Reimbursed'])),
-            
-            total_rejected=Count('id', filter=Q(status='Rejected')),
-            
-            # Frontend expects 'department_spend', so we name it that (was total_team_spending)
-            # LOGIC CHANGE: Only sum 'Reimbursed' items as per your request
-            department_spend=Sum('amount', filter=Q(status='Reimbursed'))
-        )
-        
-        # 3. Handle NULL values (if no expenses exist, return 0 instead of None)
-        if stats['department_spend'] is None:
-            stats['department_spend'] = 0
-
-        return Response(stats)
-
-
-class FinanceDashboardView(views.APIView):
-    """
-    GET: Returns stats for the Finance Department.
-    - pending_reimbursements: Total amount waiting to be paid (Status='Approved').
-    - monthly_reimbursement_totals: List of totals reimbursed per month.
-    """
-    permission_classes = [permissions.IsAuthenticated, IsFinance]
-
-    def get(self, request):
-      
-        pending_stats = Expense.objects.filter(status='Approved').aggregate(
-            total_amount=Sum('amount')
-        )
-        pending_amount = pending_stats['total_amount'] or 0
-
-        
-        monthly_stats = (
-            Expense.objects.filter(status='Reimbursed')
-            .annotate(month=TruncMonth('created_at'))  
-            .values('month')                           
-            .annotate(total_amount=Sum('amount'))      
-            .order_by('-month')                        
-        )
-
-        return Response({
-            "pending_reimbursements": pending_amount,
-            "monthly_reimbursement_totals": list(monthly_stats)
-        })
-
-
-class ExportExpensesView(views.APIView):
-    """
-    GET: Downloads an Excel file (.xlsx) of all expenses.
-    Query Params: ?status=Approved (optional filter)
-    """
-    permission_classes = [permissions.IsAuthenticated, IsFinance]
-
-    def get(self, request):
-        
-        status_filter = request.query_params.get('status')
-        queryset = Expense.objects.all().order_by('-created_at')
-        
-        if status_filter:
-            queryset = queryset.filter(status=status_filter)
-
-        
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Expense Report"
-
-        
-        headers = ["ID", "Employee", "Category", "Amount", "Status", "Date", "Description"]
-        ws.append(headers)
-
-        
-        for exp in queryset:
-            
-            date_str = exp.created_at.replace(tzinfo=None) 
-            
-            ws.append([
-                exp.id,
-                exp.employee.username,
-                exp.category.name,
-                exp.amount,
-                exp.status,
-                date_str,
-                exp.description
-            ])
-
-        
-        response = HttpResponse(
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = 'attachment; filename="expenses.xlsx"'
-        
-        wb.save(response)
-        return response
+        return Response({"message": "User deactivated"}, status=200)

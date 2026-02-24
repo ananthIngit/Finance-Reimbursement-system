@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/axiosInstance';
 import { useNavigate } from 'react-router-dom';
 
+
 const AddExpense = () => {
   const navigate = useNavigate();
   
@@ -51,7 +52,15 @@ const AddExpense = () => {
     try {
       // PREPARE DATA FOR UPLOAD (Required for Files)
       const data = new FormData();
-      data.append('title', formData.title);
+      data.append('title', formData.title); // Note: Backend expects 'description' usually, but you mapped it to title here. 
+      // Ensure backend serializer matches. Based on previous code, backend uses 'description'.
+      // If your backend serializer field is 'description', change this key to 'description'.
+      // Assuming you updated the serializer or this frontend key to match.
+      // Let's use 'description' to match the standard Expense model if needed, 
+      // but if your previous code worked with 'title', keep it. 
+      // I will keep 'description' as per standard Expense model we built.
+      data.append('description', formData.title); 
+      
       data.append('amount', formData.amount);
       data.append('category', formData.category);
       if (receipt) {
@@ -59,7 +68,6 @@ const AddExpense = () => {
       }
 
       // SEND TO BACKEND
-      // We POST to the same URL we used to GET the list
       await api.post('expenses/my/', data, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -73,9 +81,13 @@ const AddExpense = () => {
       console.error("Upload failed", err);
       // Show backend error if available
       if (err.response && err.response.data) {
-         setError(JSON.stringify(err.response.data));
+          // If it's an object, try to format it nicely
+          const msg = typeof err.response.data === 'object' 
+            ? Object.values(err.response.data).flat().join(', ')
+            : JSON.stringify(err.response.data);
+          setError(msg);
       } else {
-         setError('Failed to submit expense. Please check your inputs.');
+          setError('Failed to submit expense. Please check your inputs.');
       }
     } finally {
       setLoading(false);
@@ -83,19 +95,28 @@ const AddExpense = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex justify-center items-center p-6">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">New Expense Claim</h2>
+    // Main Container
+    <div className="min-h-screen flex justify-center items-center p-6 transition-colors duration-300 bg-gray-50 dark:bg-gray-900">
+      
+      {/* Form Card */}
+      <div className="w-full max-w-md rounded-lg shadow-lg p-8 transition-colors duration-300 bg-white dark:bg-gray-800">
+        <h2 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white">New Expense Claim</h2>
         
-        {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4 text-sm">{error}</div>}
+        {error && (
+            <div className="p-3 rounded mb-4 text-sm bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                {error}
+            </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           {/* TITLE */}
           <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">Title / Description</label>
+            <label className="block font-medium mb-2 text-gray-700 dark:text-gray-300">Title / Description</label>
             <input 
               type="text" name="title" required
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors
+                         bg-white border-gray-300 text-gray-900
+                         dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
               placeholder="e.g. Flight to NYC"
               onChange={handleChange}
             />
@@ -103,10 +124,12 @@ const AddExpense = () => {
 
           {/* AMOUNT */}
           <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">Amount ($)</label>
+            <label className="block font-medium mb-2 text-gray-700 dark:text-gray-300">Amount ($)</label>
             <input 
               type="number" name="amount" required min="0" step="0.01"
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors
+                         bg-white border-gray-300 text-gray-900
+                         dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
               placeholder="0.00"
               onChange={handleChange}
             />
@@ -114,26 +137,32 @@ const AddExpense = () => {
 
           {/* CATEGORY DROPDOWN */}
           <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">Category</label>
+            <label className="block font-medium mb-2 text-gray-700 dark:text-gray-300">Category</label>
             <select 
               name="category" required
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors
+                         bg-white border-gray-300 text-gray-900
+                         dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               onChange={handleChange}
               defaultValue=""
             >
-              <option value="" disabled>-- Select Category --</option>
+              <option value="" disabled className="dark:bg-gray-700">-- Select Category --</option>
               {categories.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                <option key={cat.id} value={cat.id} className="dark:bg-gray-700">{cat.name}</option>
               ))}
             </select>
           </div>
 
           {/* RECEIPT UPLOAD */}
           <div className="mb-6">
-            <label className="block text-gray-700 font-medium mb-2">Receipt (Optional)</label>
+            <label className="block font-medium mb-2 text-gray-700 dark:text-gray-300">Receipt (Optional)</label>
             <input 
               type="file" 
-              className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              className="w-full text-sm 
+                         text-gray-500 dark:text-gray-400
+                         file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold 
+                         file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100
+                         dark:file:bg-blue-900/30 dark:file:text-blue-300 dark:hover:file:bg-blue-900/50"
               onChange={handleFileChange}
             />
           </div>
@@ -143,14 +172,18 @@ const AddExpense = () => {
             <button 
               type="button"
               onClick={() => navigate('/my-expenses')}
-              className="w-1/2 bg-gray-300 text-gray-800 py-2 rounded hover:bg-gray-400"
+              className="w-1/2 py-2 rounded transition font-medium
+                         bg-gray-300 text-gray-800 hover:bg-gray-400
+                         dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
             >
               Cancel
             </button>
             <button 
               type="submit" 
               disabled={loading}
-              className="w-1/2 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-blue-300"
+              className="w-1/2 py-2 rounded transition font-medium text-white shadow-md
+                         bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300
+                         dark:bg-blue-600 dark:hover:bg-blue-700 dark:disabled:bg-blue-900"
             >
               {loading ? 'Submitting...' : 'Submit Claim'}
             </button>

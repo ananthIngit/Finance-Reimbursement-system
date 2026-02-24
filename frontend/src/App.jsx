@@ -3,19 +3,25 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './pages/Login';
 import Register from './pages/Register';
 
+// PASSWORD RESET
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+
 // Employee Pages
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import MyExpenses from './pages/MyExpenses';
 import AddExpense from './pages/AddExpense';
-import EmployeeProfile from './pages/EmployeeProfile'; // <--- IMPORT THIS
+import EmployeeProfile from './pages/EmployeeProfile';
 
 // Manager Pages
 import ManagerDashboard from './pages/ManagerDashboard';
 import ManagerApprovals from './pages/ManagerApprovals';
+import ManagerProfile from './pages/ManagerProfile'; // 👈 NEW
 
 // Finance Pages
 import FinanceDashboard from './pages/FinanceDashboard';
 import FinancePayouts from './pages/FinancePayouts';
+import FinanceProfile from './pages/FinanceProfile'; // 👈 NEW (Ready for next step)
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -33,85 +39,96 @@ function App() {
         {/* ================= PUBLIC ROUTES ================= */}
         <Route path="/" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
 
         {/* ================= EMPLOYEE ROUTES ================= */}
-        <Route
-          path="/dashboard"
+        <Route 
+          path="/dashboard" 
           element={
             <ProtectedRoute>
-              <EmployeeDashboard />
+              <EmployeeDashboard /> 
             </ProtectedRoute>
-          }
+          } 
         />
-
-        <Route
-          path="/my-expenses"
+        <Route 
+          path="/my-expenses" 
           element={
             <ProtectedRoute>
-              <MyExpenses />
+              <MyExpenses /> 
             </ProtectedRoute>
-          }
+          } 
         />
-
-        <Route
-          path="/add-expense"
+        <Route 
+          path="/add-expense" 
           element={
             <ProtectedRoute>
-              <AddExpense />
+              <AddExpense /> 
             </ProtectedRoute>
-          }
+          } 
         />
-
-        {/* 👇 NEW PROFILE ROUTE (Fixes the redirection issue) 👇 */}
-        <Route
-          path="/profile"
+        <Route 
+          path="/profile" 
           element={
             <ProtectedRoute>
-              <EmployeeProfile />
+              <EmployeeProfile /> 
             </ProtectedRoute>
-          }
+          } 
         />
 
         {/* ================= MANAGER ROUTES ================= */}
-        <Route
-          path="/manager-dashboard"
+        <Route 
+          path="/manager-dashboard" 
           element={
             <ProtectedRoute>
-              <ManagerDashboard />
+              <ManagerDashboard /> 
             </ProtectedRoute>
-          }
+          } 
         />
-
-        <Route
-          path="/manager/approvals"
+        <Route 
+          path="/manager/approvals" 
           element={
             <ProtectedRoute>
-              <ManagerApprovals />
+              <ManagerApprovals /> 
             </ProtectedRoute>
-          }
+          } 
+        />
+        <Route 
+          path="/manager/profile" 
+          element={
+            <ProtectedRoute>
+              <ManagerProfile /> 
+            </ProtectedRoute>
+          } 
         />
 
         {/* ================= FINANCE ROUTES ================= */}
-        <Route
-          path="/finance-dashboard"
+        <Route 
+          path="/finance-dashboard" 
           element={
             <ProtectedRoute>
-              <FinanceDashboard />
+              <FinanceDashboard /> 
             </ProtectedRoute>
-          }
+          } 
         />
-
-        <Route
-          path="/finance/payouts"
+        <Route 
+          path="/finance/payouts" 
           element={
             <ProtectedRoute>
-              <FinancePayouts />
+              <FinancePayouts /> 
             </ProtectedRoute>
-          }
+          } 
+        />
+        <Route 
+          path="/finance/profile" 
+          element={
+            <ProtectedRoute>
+              <FinanceProfile /> 
+            </ProtectedRoute>
+          } 
         />
 
         {/* ================= CATCH-ALL ================= */}
-        {/* Redirect unknown URLs to Login */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>

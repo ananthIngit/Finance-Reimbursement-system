@@ -4,6 +4,15 @@ from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer   
 from .models import Role, Category, Expense, ApprovalLog
 
+# 👇 IMPORTS FOR PASSWORD RESET
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
+from rest_framework.exceptions import AuthenticationFailed 
+
+# 👇 Custom Generator Import
+from .tokens import account_activation_token
+
 User = get_user_model()
 
 
@@ -156,7 +165,6 @@ class ApprovalLogSerializer(serializers.ModelSerializer):
         fields = ['id', 'reviewer_name', 'new_status', 'remarks', 'action_date']
 
 
-# 👇 UPDATED CLASS HERE 👇
 class UserProfileSerializer(serializers.ModelSerializer):
     """
     Used for MyProfileView. Allows fetching and updating profile details.
@@ -238,3 +246,56 @@ class ChangePasswordSerializer(serializers.Serializer):
         if len(value) < 8:
             raise serializers.ValidationError("New password must be at least 8 characters long.")
         return value
+
+
+# 👇 FINAL PASSWORD RESET SERIALIZERS (Cleaned) 👇
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    class Meta:
+        fields = ['email']
+
+class SetNewPasswordSerializer(serializers.Serializer):
+    password = serializers.CharField(min_length=6, write_only=True)
+    token = serializers.CharField(write_only=True)
+    uidb64 = serializers.CharField(write_only=True)
+
+    class Meta:
+        fields = ['password', 'token', 'uidb64']
+
+    def validate(self, attrs):
+        # 1. Get Params
+        raw_token = attrs.get('token')
+        uidb64 = attrs.get('uidb64')
+
+        # 2. Clean token (handle email client artifacts)
+        token = raw_token.strip().rstrip('=')
+
+        # 3. Decode User ID
+        try:
+            id = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(id=id)
+        except Exception:
+            raise AuthenticationFailed("Invalid user link.", 401)
+
+        # 4. Check the Token using our Custom Generator
+        is_valid = account_activation_token.check_token(user, token)
+        
+        if not is_valid:
+            raise AuthenticationFailed("The reset link is invalid or has expired.", 401)
+
+        # 5. Success
+        attrs['user'] = user
+        return attrs
+
+    def create(self, validated_data):
+        """
+        Actually update the password in the database.
+        """
+        user = validated_data['user']
+        password = validated_data['password']
+        
+        user.set_password(password)
+        user.save()
+        return user

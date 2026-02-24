@@ -5,9 +5,11 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('expense.urls')), # <--- Connects your app here
+    
+    # 👇 Keep only this one. It will handle ALL api routes.
+    path('api/', include('expense.urls')), 
 ]
 
-# This helper allows serving uploaded files (Receipts) during development
+# Serve Media Files in Development
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)    

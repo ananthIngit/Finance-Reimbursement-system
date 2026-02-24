@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/axiosInstance';
 import { useNavigate } from 'react-router-dom';
+import ThemeToggle from '../components/ThemeToggle'; // 👈 IMPORT THIS
 
 const EmployeeProfile = () => {
     const [profile, setProfile] = useState(null);
@@ -46,14 +47,13 @@ const EmployeeProfile = () => {
         });
     };
 
-    // 3. Save Text Changes (Fixes the hyphen issue)
+    // 3. Save Text Changes
     const handleSave = async () => {
         try {
             // Send PATCH request with the form data
             const response = await api.patch('users/profile/', formData);
             
-            // IMPORTANT: Merge the RESPONSE data into the profile state.
-            // This ensures we show exactly what the server saved.
+            // Merge response into state
             setProfile(prev => ({ 
                 ...prev, 
                 first_name: response.data.first_name, 
@@ -80,10 +80,6 @@ const EmployeeProfile = () => {
         if (!file) return;
 
         const uploadData = new FormData();
-        // Key must match 'profile_pic' in your serializer source or 'profile_picture' if mapped
-        // Based on your serializer: profile_picture = serializers.ImageField(source='profile_pic'...)
-        // So the frontend should send 'profile_picture' or 'profile_pic' depending on how DRF parses it.
-        // Usually, ModelSerializer expects the field name defined in fields[].
         uploadData.append('profile_picture', file); 
 
         try {
@@ -100,18 +96,22 @@ const EmployeeProfile = () => {
         }
     };
 
-    if (loading) return <div className="p-10 text-center">Loading Profile...</div>;
-    if (!profile) return <div className="p-10 text-center text-red-500">Profile not found.</div>;
+    if (loading) return <div className="p-10 text-center text-gray-500 dark:text-gray-400">Loading Profile...</div>;
+    if (!profile) return <div className="p-10 text-center text-red-500 dark:text-red-400">Profile not found.</div>;
 
     return (
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
-            <div className="bg-white rounded-2xl shadow-xl overflow-hidden max-w-lg w-full">
+        // Main Container
+        <div className="min-h-screen flex items-center justify-center p-6 transition-colors duration-300 bg-gray-100 dark:bg-gray-900">
+            
+            {/* Profile Card */}
+            <div className="rounded-2xl shadow-xl overflow-hidden max-w-lg w-full transition-colors duration-300 bg-white dark:bg-gray-800">
 
                 {/* Top Header Background */}
-                <div className="h-32 bg-indigo-600 relative">
+                <div className="h-32 relative bg-indigo-600 dark:bg-indigo-700">
                     <button
                         onClick={() => navigate('/dashboard')}
-                        className="absolute top-4 left-4 text-white bg-black/20 hover:bg-black/40 px-3 py-1 rounded-full text-sm font-medium transition"
+                        className="absolute top-4 left-4 text-white px-3 py-1 rounded-full text-sm font-medium transition
+                                   bg-black/20 hover:bg-black/40"
                     >
                         ← Back to Dashboard
                     </button>
@@ -120,7 +120,9 @@ const EmployeeProfile = () => {
                 {/* Profile Picture & Info */}
                 <div className="px-8 pb-8">
                     <div className="relative flex justify-center -mt-16 mb-6">
-                        <div className="relative h-32 w-32 rounded-full border-4 border-white bg-gray-200 shadow-lg group overflow-hidden">
+                        <div className="relative h-32 w-32 rounded-full border-4 shadow-lg group overflow-hidden
+                                        border-white bg-gray-200 
+                                        dark:border-gray-800 dark:bg-gray-700">
                             
                             {/* Current Image or Initials */}
                             {profile.profile_picture ? (
@@ -130,7 +132,9 @@ const EmployeeProfile = () => {
                                     className="h-full w-full object-cover"
                                 />
                             ) : (
-                                <div className="h-full w-full flex items-center justify-center bg-indigo-100 text-indigo-500 text-4xl font-bold uppercase">
+                                <div className="h-full w-full flex items-center justify-center text-4xl font-bold uppercase
+                                                bg-indigo-100 text-indigo-500 
+                                                dark:bg-indigo-900/50 dark:text-indigo-300">
                                     {profile.username?.charAt(0) || "U"}
                                 </div>
                             )}
@@ -153,64 +157,70 @@ const EmployeeProfile = () => {
                     </div>
 
                     <div className="text-center mb-8">
-                        <h1 className="text-2xl font-bold text-gray-800">{profile.username}</h1>
-                        <p className="text-gray-500">{profile.email}</p>
+                        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">{profile.username}</h1>
+                        <p className="text-gray-500 dark:text-gray-400">{profile.email}</p>
                     </div>
 
                     {/* Details Form */}
                     <div className="space-y-4">
                         {/* First Name */}
-                        <div className="flex justify-between items-center border-b pb-2 h-10">
-                            <span className="text-gray-600 font-medium">First Name</span>
+                        <div className="flex justify-between items-center border-b pb-2 h-10 border-gray-200 dark:border-gray-700">
+                            <span className="font-medium text-gray-600 dark:text-gray-400">First Name</span>
                             {isEditing ? (
                                 <input
                                     type="text"
                                     name="first_name"
                                     value={formData.first_name}
                                     onChange={handleChange}
-                                    className="border rounded px-2 py-1 text-gray-800 focus:outline-indigo-500 w-1/2 text-right bg-gray-50"
+                                    className="border rounded px-2 py-1 w-1/2 text-right focus:outline-indigo-500 transition-colors
+                                               bg-gray-50 border-gray-300 text-gray-800 
+                                               dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                     placeholder="Enter first name"
                                 />
                             ) : (
-                                <span className="text-gray-800 font-semibold">{profile.first_name || "-"}</span>
+                                <span className="font-semibold text-gray-800 dark:text-gray-200">{profile.first_name || "-"}</span>
                             )}
                         </div>
 
                         {/* Last Name */}
-                        <div className="flex justify-between items-center border-b pb-2 h-10">
-                            <span className="text-gray-600 font-medium">Last Name</span>
+                        <div className="flex justify-between items-center border-b pb-2 h-10 border-gray-200 dark:border-gray-700">
+                            <span className="font-medium text-gray-600 dark:text-gray-400">Last Name</span>
                             {isEditing ? (
                                 <input
                                     type="text"
                                     name="last_name"
                                     value={formData.last_name}
                                     onChange={handleChange}
-                                    className="border rounded px-2 py-1 text-gray-800 focus:outline-indigo-500 w-1/2 text-right bg-gray-50"
+                                    className="border rounded px-2 py-1 w-1/2 text-right focus:outline-indigo-500 transition-colors
+                                               bg-gray-50 border-gray-300 text-gray-800 
+                                               dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                     placeholder="Enter last name"
                                 />
                             ) : (
-                                <span className="text-gray-800 font-semibold">{profile.last_name || "-"}</span>
+                                <span className="font-semibold text-gray-800 dark:text-gray-200">{profile.last_name || "-"}</span>
                             )}
                         </div>
 
                         {/* Read-Only Fields */}
-                        <div className="flex justify-between border-b pb-2 h-10 items-center">
-                            <span className="text-gray-600 font-medium">Department</span>
-                            <span className="text-gray-800 font-semibold">
+                        <div className="flex justify-between items-center border-b pb-2 h-10 border-gray-200 dark:border-gray-700">
+                            <span className="font-medium text-gray-600 dark:text-gray-400">Department</span>
+                            <span className="font-semibold text-gray-800 dark:text-gray-200">
                                 {profile.department_name || "General"}
                             </span>
                         </div>
 
-                        <div className="flex justify-between border-b pb-2 h-10 items-center">
-                            <span className="text-gray-600 font-medium">Role</span>
-                            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold uppercase">
+                        <div className="flex justify-between items-center border-b pb-2 h-10 border-gray-200 dark:border-gray-700">
+                            <span className="font-medium text-gray-600 dark:text-gray-400">Role</span>
+                            <span className="px-3 py-1 rounded-full text-xs font-bold uppercase
+                                             bg-blue-100 text-blue-700 
+                                             dark:bg-blue-900/30 dark:text-blue-300">
                                 {profile.role_name || "Employee"}
                             </span>
                         </div>
 
-                        <div className="flex justify-between border-b pb-2 h-10 items-center">
-                            <span className="text-gray-600 font-medium">Manager</span>
-                            <span className="text-gray-800 font-semibold">
+                        <div className="flex justify-between items-center border-b pb-2 h-10 border-gray-200 dark:border-gray-700">
+                            <span className="font-medium text-gray-600 dark:text-gray-400">Manager</span>
+                            <span className="font-semibold text-gray-800 dark:text-gray-200">
                                 {profile.manager_name || "None"}
                             </span>
                         </div>
@@ -222,20 +232,23 @@ const EmployeeProfile = () => {
                             <>
                                 <button
                                     onClick={handleSave}
-                                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 shadow transition font-medium"
+                                    className="px-6 py-2 rounded-lg shadow transition font-medium text-white
+                                               bg-indigo-600 hover:bg-indigo-700 
+                                               dark:bg-indigo-600 dark:hover:bg-indigo-700"
                                 >
                                     Save Changes
                                 </button>
                                 <button
                                     onClick={() => {
                                         setIsEditing(false);
-                                        // Reset form to original profile data in case of cancel
                                         setFormData({ 
                                             first_name: profile.first_name || '', 
                                             last_name: profile.last_name || '' 
                                         }); 
                                     }}
-                                    className="bg-gray-300 text-gray-800 px-6 py-2 rounded-lg hover:bg-gray-400 shadow transition font-medium"
+                                    className="px-6 py-2 rounded-lg shadow transition font-medium
+                                               bg-gray-300 text-gray-800 hover:bg-gray-400 
+                                               dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                                 >
                                     Cancel
                                 </button>
@@ -243,7 +256,9 @@ const EmployeeProfile = () => {
                         ) : (
                             <button
                                 onClick={() => setIsEditing(true)}
-                                className="text-indigo-600 hover:text-indigo-800 font-medium text-sm border border-indigo-600 px-6 py-2 rounded-lg hover:bg-indigo-50 transition"
+                                className="font-medium text-sm border px-6 py-2 rounded-lg transition shadow-sm
+                                           text-indigo-600 border-indigo-600 hover:bg-indigo-50 
+                                           dark:text-indigo-400 dark:border-indigo-400 dark:hover:bg-indigo-900/20"
                             >
                                 Edit Profile
                             </button>
