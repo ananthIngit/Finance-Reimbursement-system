@@ -97,7 +97,7 @@ const FinanceDashboard = () => {
                 <h1 className="text-sm font-bold leading-tight text-slate-800 dark:text-white">
                   {userProfile?.username || "Finance Admin"}
                 </h1>
-                <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Finance Portal</span>
+                <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">View Profile</span>
               </div>
             </div>
 
