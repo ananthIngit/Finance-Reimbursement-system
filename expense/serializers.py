@@ -4,17 +4,11 @@ from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer   
 from .models import Role, Category, Expense, ApprovalLog
 
-# 👇 IMPORTS FOR PASSWORD RESET
-from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.utils.encoding import force_str
-from django.utils.http import urlsafe_base64_decode
-from rest_framework.exceptions import AuthenticationFailed 
-
-# 👇 Custom Generator Import
-from .tokens import account_activation_token
-
 User = get_user_model()
 
+# ==========================
+# 1. AUTHENTICATION & REGISTRATION
+# ==========================
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
@@ -27,7 +21,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['email'] = self.user.email
         data['role'] = self.user.role.name if self.user.role else "No Role"
         return data
-
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True) 
@@ -48,13 +41,15 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password')
-        
         user = User(**validated_data) 
-        
         user.set_password(password) 
         user.save()
         return user
 
+
+# ==========================
+# 2. PROFILE & SETTINGS
+# ==========================
 
 class UserSerializer(serializers.ModelSerializer):
     """
@@ -67,18 +62,73 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'role_name', 'department', 'manager_name', 'profile_pic']
 
+class UserProfileSerializer(serializers.ModelSerializer):
+    """
+    Used for MyProfileView. Allows fetching and updating profile details.
+    """
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+    profile_picture = serializers.ImageField(source='profile_pic', required=False)
+
+    role_name = serializers.ReadOnlyField(source='role.name')
+    manager_name = serializers.ReadOnlyField(source='manager.username')
+    department_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name', 
+            'profile_picture', 'department_name', 'role_name', 'manager_name'
+        ]
+        read_only_fields = ['id', 'username', 'email', 'department_name', 'role_name', 'manager_name']
+
+    def get_department_name(self, obj):
+        return str(obj.department) if obj.department else "General"
+
+class ChangeUsernameSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['username']
+    
+    def validate_username(self, value):
+        if not re.match(r'^[a-zA-Z0-9]+$', value):
+            raise serializers.ValidationError("Username can only contain letters and numbers.")
+        return value
+
+class ChangeProfilePicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['profile_pic']
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True)
+
+    def validate_old_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Old password is not correct.")
+        return value
+
+    def validate_new_password(self, value):
+        if len(value) < 8:
+            raise serializers.ValidationError("New password must be at least 8 characters long.")
+        return value
+
+
+# ==========================
+# 3. EXPENSES & CATEGORIES
+# ==========================
 
 class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role
         fields = ['id', 'name']
 
-
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = ['id', 'name', 'is_active']
-
 
 class ExpenseSerializer(serializers.ModelSerializer):
     """
@@ -92,15 +142,8 @@ class ExpenseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Expense
         fields = [
-            'id', 
-            'employee_name', 
-            'category',       
-            'category_name',  
-            'amount', 
-            'description', 
-            'receipt', 
-            'status', 
-            'created_at'
+            'id', 'employee_name', 'category', 'category_name', 
+            'amount', 'description', 'receipt', 'status', 'created_at'
         ]
         read_only_fields = ['status', 'created_at', 'employee'] 
 
@@ -112,10 +155,8 @@ class ExpenseSerializer(serializers.ModelSerializer):
     def validate_description(self, value):
         if len(value) < 5:
             raise serializers.ValidationError("Description is too short (min 5 characters).")
-        
         if "<script>" in value.lower():
             raise serializers.ValidationError("Invalid characters in description.")
-            
         return value
 
     def validate_receipt(self, value):
@@ -135,13 +176,11 @@ class ExpenseSerializer(serializers.ModelSerializer):
             
         return value
 
-
 class ExpenseActionSerializer(serializers.Serializer):
     """
-    UPDATED: Now includes 'Reimbursed' in choices for Finance users.
+    Includes 'Reimbursed' in choices for Finance users.
     Ensures 'remarks' are present if rejected.
     """
-    
     action = serializers.ChoiceField(choices=['Approved', 'Rejected', 'Reimbursed']) 
     remarks = serializers.CharField(required=False, allow_blank=True)
 
@@ -156,7 +195,6 @@ class ExpenseActionSerializer(serializers.Serializer):
                 })
         return data
 
-
 class ApprovalLogSerializer(serializers.ModelSerializer):
     reviewer_name = serializers.ReadOnlyField(source='reviewer.username')
 
@@ -165,137 +203,29 @@ class ApprovalLogSerializer(serializers.ModelSerializer):
         fields = ['id', 'reviewer_name', 'new_status', 'remarks', 'action_date']
 
 
-class UserProfileSerializer(serializers.ModelSerializer):
-    """
-    Used for MyProfileView. Allows fetching and updating profile details.
-    """
-    # Writable fields for editing
-    first_name = serializers.CharField(required=False, allow_blank=True)
-    last_name = serializers.CharField(required=False, allow_blank=True)
-    
-    # Map 'profile_picture' (Frontend) -> 'profile_pic' (Model)
-    profile_picture = serializers.ImageField(source='profile_pic', required=False)
+# ==========================
+# 4. ADMIN DASHBOARD
+# ==========================
 
-    # Read-only fields for display
-    role_name = serializers.ReadOnlyField(source='role.name')
-    manager_name = serializers.ReadOnlyField(source='manager.username')
-    
-    # Handle department name safely
-    department_name = serializers.SerializerMethodField()
+class AdminUserListSerializer(serializers.ModelSerializer):
+    """
+    Formats user data for the main Admin table.
+    """
+    role_name = serializers.CharField(source='role.name', read_only=True)
+    manager_name = serializers.CharField(source='manager.username', read_only=True)
 
     class Meta:
         model = User
         fields = [
-            'id', 
-            'username',    
-            'email', 
-            'first_name',
-            'last_name',
-            'profile_picture',   
-            'department_name',
-            'role_name',
-            'manager_name'
+            'id', 'username', 'email', 'first_name', 'last_name', 
+            'role', 'role_name', 'manager', 'manager_name', 
+            'department', 'is_active', 'date_joined'
         ]
-        read_only_fields = ['id', 'username', 'email', 'department_name', 'role_name', 'manager_name']
 
-    def get_department_name(self, obj):
-        return str(obj.department) if obj.department else "General"
-
-
-class ChangeUsernameSerializer(serializers.ModelSerializer):
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
     """
-    Used only for changing the username.
+    Used when the Admin updates a user's role, manager, or status.
     """
     class Meta:
         model = User
-        fields = ['username']
-    
-   
-    def validate_username(self, value):
-        if not re.match(r'^[a-zA-Z0-9]+$', value):
-            raise serializers.ValidationError("Username can only contain letters and numbers.")
-        return value
-
-
-class ChangeProfilePicSerializer(serializers.ModelSerializer):
-    """
-    Used only for uploading a new profile picture.
-    """
-    class Meta:
-        model = User
-        fields = ['profile_pic']
-
-
-class ChangePasswordSerializer(serializers.Serializer):
-    """
-    Serializer for password change endpoint.
-    Verifies old password before allowing change.
-    Also validates complexity of new password.
-    """
-    old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True)
-
-    def validate_old_password(self, value):
-        user = self.context['request'].user
-        if not user.check_password(value):
-            raise serializers.ValidationError("Old password is not correct.")
-        return value
-
-    def validate_new_password(self, value):
-        
-        if len(value) < 8:
-            raise serializers.ValidationError("New password must be at least 8 characters long.")
-        return value
-
-
-# 👇 FINAL PASSWORD RESET SERIALIZERS (Cleaned) 👇
-
-class PasswordResetRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-
-    class Meta:
-        fields = ['email']
-
-class SetNewPasswordSerializer(serializers.Serializer):
-    password = serializers.CharField(min_length=6, write_only=True)
-    token = serializers.CharField(write_only=True)
-    uidb64 = serializers.CharField(write_only=True)
-
-    class Meta:
-        fields = ['password', 'token', 'uidb64']
-
-    def validate(self, attrs):
-        # 1. Get Params
-        raw_token = attrs.get('token')
-        uidb64 = attrs.get('uidb64')
-
-        # 2. Clean token (handle email client artifacts)
-        token = raw_token.strip().rstrip('=')
-
-        # 3. Decode User ID
-        try:
-            id = force_str(urlsafe_base64_decode(uidb64))
-            user = User.objects.get(id=id)
-        except Exception:
-            raise AuthenticationFailed("Invalid user link.", 401)
-
-        # 4. Check the Token using our Custom Generator
-        is_valid = account_activation_token.check_token(user, token)
-        
-        if not is_valid:
-            raise AuthenticationFailed("The reset link is invalid or has expired.", 401)
-
-        # 5. Success
-        attrs['user'] = user
-        return attrs
-
-    def create(self, validated_data):
-        """
-        Actually update the password in the database.
-        """
-        user = validated_data['user']
-        password = validated_data['password']
-        
-        user.set_password(password)
-        user.save()
-        return user
+        fields = ['role', 'manager', 'department', 'is_active']

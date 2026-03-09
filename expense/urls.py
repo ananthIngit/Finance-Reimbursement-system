@@ -18,28 +18,28 @@ from .views import (
     ManagerDashboardView,
     FinanceDashboardView,
     ExportExpensesView,
-    RequestPasswordResetView,
-    PasswordTokenCheckView,
-    SetNewPasswordView
+    RequestOTPView,
+    ResetPasswordWithOTPView,
+    # ADMIN VIEWS
+    AdminUserListView,
+    AdminUserDetailView,
+    AdminDropdownDataView,
+    AdminStatsView,
+    VerifyOTPView
 )
 
 urlpatterns = [
     # ==========================
     # 1. Authentication
     # ==========================
-    # Frontend calls axios.post('/api/register/')
     path('register/', RegisterView.as_view(), name='register'),
-    
-    # Frontend calls axios.post('/api/auth/login/')
     path('auth/login/', CustomLoginView.as_view(), name='login'),
-    
-    # Refresh token endpoint
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
-    # PASSWORD RESET ROUTES
-    path('password-reset/', RequestPasswordResetView.as_view(), name='password-reset-request'),
-    path('password-reset-confirm/<uidb64>/<token>/', PasswordTokenCheckView.as_view(), name='password-reset-confirm'),
-    path('password-reset-complete/', SetNewPasswordView.as_view(), name='password-reset-complete'),
+    # OTP PASSWORD RESET ROUTES
+    path('auth/request-otp/', RequestOTPView.as_view(), name='request-otp'),
+    path('auth/verify-otp/', VerifyOTPView.as_view(), name='verify-otp'),
+    path('auth/reset-password-otp/', ResetPasswordWithOTPView.as_view(), name='reset-password-otp'),
 
     # ==========================
     # 2. General / Helpers
@@ -76,7 +76,15 @@ urlpatterns = [
     path('profile/change-password/', ChangePasswordView.as_view(), name='change-password'), 
 
     # ==========================
-    # 7. Admin Actions
+    # 7. Admin Actions (Delete Self/Basic)
     # ==========================
     path('users/delete/<int:pk>/', DeleteUserView.as_view(), name='delete-user'),
+
+    # ==========================
+    # 8. Admin Management (Superuser/IT Dashboard)
+    # ==========================
+    path('admin-api/users/', AdminUserListView.as_view(), name='admin-user-list'),
+    path('admin-api/users/<int:pk>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
+    path('admin-api/dropdowns/', AdminDropdownDataView.as_view(), name='admin-dropdowns'),
+    path('admin-api/stats/', AdminStatsView.as_view(), name='admin-stats'),
 ]

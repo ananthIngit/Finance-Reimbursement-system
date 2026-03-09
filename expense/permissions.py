@@ -19,5 +19,14 @@ class IsOwner(permissions.BasePermission):
     Custom permission to only allow owners of an object to edit it.
     """
     def has_object_permission(self, request, view, obj):
-        
         return obj.employee == request.user
+
+# 👇 NEW ADMIN PERMISSION ADDED HERE 👇
+class IsSystemAdmin(permissions.BasePermission):
+    """
+    Allows access only to users with the 'Admin' role.
+    """
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role and request.user.role.name == 'Admin'
+    
+    

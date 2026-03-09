@@ -1,13 +1,6 @@
 from django.core.mail import send_mail
 from django.conf import settings
 
-# 👇 IMPORTS FOR PASSWORD RESET
-from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_encode
-
-# 👇 CRITICAL IMPORT: Use our Custom Generator (Stable Hash)
-from .tokens import account_activation_token 
-
 def send_status_update_email(expense):
     """
     Sends an email to the employee when their expense status changes.
@@ -16,14 +9,14 @@ def send_status_update_email(expense):
     
     if expense.status == 'Approved':
         message = (
-            f"Hi {expense.employee.first_name},\n\n"
+            f"Hi {expense.employee.first_name or expense.employee.username},\n\n"
             f"Good news! Your expense request for '{expense.description}' (${expense.amount}) has been APPROVED by your manager.\n\n"
             f"It is now sent to Finance for reimbursement.\n\n"
             f"Cheers,\nExpense Team"
         )
     elif expense.status == 'Rejected':
         message = (
-            f"Hi {expense.employee.first_name},\n\n"
+            f"Hi {expense.employee.first_name or expense.employee.username},\n\n"
             f"Your expense request for '{expense.description}' was REJECTED.\n\n"
             f"Reason: See portal for remarks.\n\n"
             f"Please contact your manager for details.\n\n"
@@ -31,7 +24,7 @@ def send_status_update_email(expense):
         )
     elif expense.status == 'Reimbursed':
         message = (
-            f"Hi {expense.employee.first_name},\n\n"
+            f"Hi {expense.employee.first_name or expense.employee.username},\n\n"
             f"Payment Processed! Your expense of ${expense.amount} has been REIMBURSED.\n"
             f"The funds should appear in your account shortly.\n\n"
             f"Cheers,\nFinance Team"
@@ -39,7 +32,7 @@ def send_status_update_email(expense):
     else:
         return 
 
-    print(f"📨 Sending email to {expense.employee.email}...") 
+    print(f"📨 Sending status update email to {expense.employee.email}...") 
     send_mail(
         subject,
         message,
@@ -49,47 +42,41 @@ def send_status_update_email(expense):
     )
 
 
-# 👇 UPDATED FUNCTION: Sends the Password Reset Link
-def send_password_reset_email(user):
+# 👇 UPDATED FUNCTION: Sends the 6-Digit OTP
+def send_otp_email(user, otp):
     """
-    Generates a secure token link and sends it to the user's email.
+    Sends a 6-digit OTP to the user's email for password reset.
     """
-    # 1. Generate unique encoded ID
-    uidb64 = urlsafe_base64_encode(force_bytes(user.id))
     
-    # 2. Generate Token using OUR CUSTOM GENERATOR (Stable Hash)
-    token = account_activation_token.make_token(user)
-    
-    # 3. Construct the Frontend URL 
-    link = f"http://localhost:5173/reset-password/{uidb64}/{token}"
-    
-    # 👇 CLEANER CONSOLE OUTPUT (Prevents copy-paste errors)
+    # 👇 CLEAN CONSOLE OUTPUT (Helpful for quick local testing!)
     print("\n" + "="*60)
-    print(f"🔐 PASSWORD RESET LINK FOR {user.username}")
-    print("(Copy the line below carefully without spaces):")
-    print("")
-    print(link)
-    print("")
+    print(f"🔐 OTP FOR {user.username}: {otp}")
     print("="*60 + "\n")
     
-    subject = "Reset Your Password - ExpenseManager"
-    message = f"""
-    Hi {user.username},
-
-    You requested to reset your password. Click the link below to set a new password:
-
-    {link}
-
-    If you didn't ask for this, please ignore this email.
+    subject = "Your ExpenseManager Password Reset Code"
     
-    Cheers,
-    ExpenseManager Security Team
-    """
+    message = f"""Hi {user.username},
+
+We received a request to reset the password for your ExpenseManager account.
+
+Your 6-digit reset code is: 
+{otp}
+
+This code will expire in exactly 10 minutes.
+
+If you did not request a password reset, please ignore this email. Your account is safe.
+
+Cheers,
+ExpenseManager Security Team
+"""
     
+    # Using DEFAULT_FROM_EMAIL if you set it in settings.py, otherwise fallback to EMAIL_HOST_USER
+    sender = getattr(settings, 'DEFAULT_FROM_EMAIL', settings.EMAIL_HOST_USER)
+
     send_mail(
         subject,
         message,
-        settings.EMAIL_HOST_USER, # Sender
+        sender, # Sender
         [user.email], # Recipient
         fail_silently=False,
     )

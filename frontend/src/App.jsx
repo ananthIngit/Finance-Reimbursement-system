@@ -3,9 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './pages/Login';
 import Register from './pages/Register';
 
-// PASSWORD RESET
+// PASSWORD RESET (Now handles the entire OTP flow)
 import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
 
 // Employee Pages
 import EmployeeDashboard from './pages/EmployeeDashboard';
@@ -16,12 +15,15 @@ import EmployeeProfile from './pages/EmployeeProfile';
 // Manager Pages
 import ManagerDashboard from './pages/ManagerDashboard';
 import ManagerApprovals from './pages/ManagerApprovals';
-import ManagerProfile from './pages/ManagerProfile'; // 👈 NEW
+import ManagerProfile from './pages/ManagerProfile'; 
 
 // Finance Pages
 import FinanceDashboard from './pages/FinanceDashboard';
 import FinancePayouts from './pages/FinancePayouts';
-import FinanceProfile from './pages/FinanceProfile'; // 👈 NEW (Ready for next step)
+import FinanceProfile from './pages/FinanceProfile'; 
+
+// Admin Pages
+import AdminDashboard from './pages/AdminDashboard'; // 👈 NEW IMPORT
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -40,7 +42,8 @@ function App() {
         <Route path="/" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
+        
+        {/* Note: The old /reset-password/:uid/:token route was removed because ForgotPassword now handles the OTP flow */}
 
         {/* ================= EMPLOYEE ROUTES ================= */}
         <Route 
@@ -124,6 +127,17 @@ function App() {
           element={
             <ProtectedRoute>
               <FinanceProfile /> 
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* ================= ADMIN ROUTES ================= */}
+        {/* 👇 NEW ADMIN ROUTE 👇 */}
+        <Route 
+          path="/admin-dashboard" 
+          element={
+            <ProtectedRoute>
+              <AdminDashboard /> 
             </ProtectedRoute>
           } 
         />

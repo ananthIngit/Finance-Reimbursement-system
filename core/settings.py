@@ -42,7 +42,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'core.urls' # Make sure your project folder is named 'core', otherwise change this.
+ROOT_URLCONF = 'core.urls' 
 
 TEMPLATES = [
     {
@@ -119,18 +119,31 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
 
-# Media Files (CRITICAL FOR RECEIPTS)
+# Media Files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Email Config (Console Backend for Dev)
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-EMAIL_HOST_USER = 'admin@company.com'
+# ==========================================
+# 📧 REAL GMAIL CONFIGURATION (SECURE)
+# ==========================================
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 465
+EMAIL_USE_TLS = False
+EMAIL_USE_SSL = True  # Port 465 requires SSL to be True
+
+# Your personal gmail used for the app
+EMAIL_HOST_USER = 'pablo12082004@gmail.com' 
+
+# The 16-letter App Password (REMOVE ALL SPACES)
+EMAIL_HOST_PASSWORD = 'mckjrvzzrojplpib' 
+
+DEFAULT_FROM_EMAIL = f'Expense Tracker Admin <{EMAIL_HOST_USER}>'
 
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173", # React Localhost
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]

@@ -1,9 +1,12 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
+from datetime import timedelta
 
-# 1. ROLE , PERM , ROLE - PERM , CATEGORIES
-
+# ==========================================
+# 1. ROLE, PERM, ROLE-PERM, CATEGORIES
+# ==========================================
 
 class Role(models.Model):
     """
@@ -54,9 +57,9 @@ class Category(models.Model):
     def __str__(self):
         return self.name
 
-
-# 2. USER , EXPENSE
-
+# ==========================================
+# 2. USER & EXPENSE
+# ==========================================
 
 class User(AbstractUser):
     """
@@ -99,9 +102,9 @@ class Expense(models.Model):
     def __str__(self):
         return f"{self.employee.username} - {self.amount}"
 
-
+# ==========================================
 # 3. APPROVAL LOGS
-
+# ==========================================
 
 class ApprovalLog(models.Model):
     expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name='logs')
@@ -115,3 +118,23 @@ class ApprovalLog(models.Model):
 
     def __str__(self):
         return f"Log: {self.expense.id} - {self.new_status}"
+
+# ==========================================
+# 4. SECURITY / OTP
+# ==========================================
+
+class PasswordResetOTP(models.Model):
+    """
+    Stores 6-digit OTP codes for password resets. Codes expire after 10 minutes.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_valid(self):
+        # Checks if the current time is less than 10 minutes after creation
+        expiry_time = self.created_at + timedelta(minutes=10)
+        return timezone.now() <= expiry_time
+
+    def __str__(self):
+        return f"OTP for {self.user.email} - {self.otp}"
