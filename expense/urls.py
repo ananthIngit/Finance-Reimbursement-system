@@ -25,7 +25,11 @@ from .views import (
     AdminUserDetailView,
     AdminDropdownDataView,
     AdminStatsView,
-    VerifyOTPView
+    VerifyOTPView,
+    # NOTIFICATION VIEWS
+    NotificationListView,
+    MarkNotificationReadView,
+    MarkAllNotificationsReadView
 )
 
 urlpatterns = [
@@ -87,4 +91,13 @@ urlpatterns = [
     path('admin-api/users/<int:pk>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
     path('admin-api/dropdowns/', AdminDropdownDataView.as_view(), name='admin-dropdowns'),
     path('admin-api/stats/', AdminStatsView.as_view(), name='admin-stats'),
+
+    # ==========================
+    # 9. Notifications
+    # ==========================
+    path('notifications/', NotificationListView.as_view(), name='notification-list'),
+    path('notifications/<int:pk>/read/', MarkNotificationReadView.as_view(), name='mark-notification-read'),
+    
+    # 🛠️ FIXED: Changed 'read-all/' to 'mark-all-read/' to match Frontend Axios call
+    path('notifications/mark-all-read/', MarkAllNotificationsReadView.as_view(), name='mark-all-notifications-read'),
 ]

@@ -156,7 +156,7 @@ const AddExpense = () => {
             {/* Receipt upload */}
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Receipt <span className="text-slate-400 font-normal">(optional)</span>
+                Receipt <span className="text-slate-400 font-normal"></span>
               </label>
               <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed rounded-lg cursor-pointer
                 border-slate-300 bg-slate-50 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800

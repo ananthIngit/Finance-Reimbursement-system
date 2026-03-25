@@ -5,8 +5,8 @@ import FilterPanel from '../components/FilterPanel';
 
 const statusBadge = (status) => {
   const map = {
-    Approved:   'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-900',
-    Rejected:   'bg-red-50 text-red-700 border-red-100 dark:bg-red-900/30 dark:text-red-400 dark:border-red-900',
+    Approved: 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-900',
+    Rejected: 'bg-red-50 text-red-700 border-red-100 dark:bg-red-900/30 dark:text-red-400 dark:border-red-900',
     Reimbursed: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-900',
   };
   return map[status] || 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-900';
@@ -16,6 +16,7 @@ const FinancePayouts = () => {
   const [expenses, setExpenses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false); // New state for download button
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -56,7 +57,6 @@ const FinancePayouts = () => {
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchPayoutQueue(); }, [currentPage, pageSize, sortBy]);
 
   useEffect(() => { setCurrentPage(1); }, [pageSize]);
@@ -84,28 +84,67 @@ const FinancePayouts = () => {
     }
   };
 
+  // 📥 New Function: Handles the Excel download
+  const handleDownloadReport = async () => {
+    setExporting(true);
+    try {
+      const response = await api.get('expenses/export/', {
+        responseType: 'blob',
+        params: { status: filters.status || undefined } // Syncs report with current filter
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Expense_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url); // Clean up memory
+    } catch (err) {
+      alert("Failed to generate Excel report.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const headerActions = (
-    <select
-      value={sortBy}
-      onChange={(e) => setSortBy(e.target.value)}
-      className="text-xs px-2.5 py-1.5 rounded-lg border
-        bg-white border-slate-300 text-slate-700
-        dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300
-        focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-    >
-      <option value="-created_at">Newest first</option>
-      <option value="amount">Amount ↑</option>
-      <option value="-amount">Amount ↓</option>
-      <option value="employee__id">Emp ID ↑</option>
-      <option value="-employee__id">Emp ID ↓</option>
-    </select>
+    <div className="flex items-center gap-3">
+      {/* Download Button */}
+      <button
+        onClick={handleDownloadReport}
+        disabled={exporting}
+        className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-lg border
+                    bg-white text-slate-700 border-slate-300 hover:bg-slate-50
+                    dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 transition shadow-sm"
+      >
+        {exporting ? (
+          <div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <svg className="w-3.5 h-3.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+        )}
+        {exporting ? 'Generating...' : 'Export Excel'}
+      </button>
+
+      <select
+        value={sortBy}
+        onChange={(e) => setSortBy(e.target.value)}
+        className="text-xs px-2.5 py-1.5 rounded-lg border
+                    bg-white border-slate-300 text-slate-700
+                    dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300
+                    focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+      >
+        <option value="-created_at">Newest first</option>
+        <option value="amount">Amount ↑</option>
+        <option value="-amount">Amount ↓</option>
+      </select>
+    </div>
   );
 
   return (
     <AppLayout title="Finance Queue" actions={headerActions}>
       <div className="space-y-5 max-w-7xl">
-
-        {/* Page header */}
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Finance Queue</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
@@ -113,7 +152,6 @@ const FinancePayouts = () => {
           </p>
         </div>
 
-        {/* Filter panel */}
         <FilterPanel
           filters={filters}
           setFilters={setFilters}
@@ -122,7 +160,6 @@ const FinancePayouts = () => {
           onClear={handleClearFilters}
         />
 
-        {/* Table container */}
         <div className="rounded-xl border overflow-hidden bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
           {loading ? (
             <div className="p-12 text-center">
@@ -189,7 +226,7 @@ const FinancePayouts = () => {
                             <button
                               onClick={() => handleReimburse(expense.id)}
                               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all
-                                bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0"
+                                                                bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0"
                             >
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -206,7 +243,7 @@ const FinancePayouts = () => {
                 </table>
               </div>
 
-              {/* Pagination */}
+              {/* Pagination Logic... */}
               <div className="px-5 py-3.5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/30">
                 <span className="text-xs text-slate-500 dark:text-slate-400">
                   Page <span className="font-semibold text-slate-800 dark:text-white">{currentPage}</span> of{' '}
@@ -221,7 +258,7 @@ const FinancePayouts = () => {
                           key={size}
                           onClick={() => setPageSize(size)}
                           className={`px-2.5 py-1 text-xs font-semibold border-r last:border-r-0 border-slate-200 dark:border-slate-700 transition-colors
-                            ${pageSize === size
+                                                        ${pageSize === size
                               ? 'bg-indigo-600 text-white'
                               : 'bg-white text-slate-500 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'}`}
                         >
@@ -235,9 +272,7 @@ const FinancePayouts = () => {
                       onClick={() => setCurrentPage((p) => p - 1)}
                       disabled={currentPage === 1}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors
-                        ${currentPage === 1
-                          ? 'bg-slate-100 text-slate-300 border-slate-100 cursor-not-allowed dark:bg-slate-800 dark:text-slate-700 dark:border-slate-800'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700'}`}
+                                                ${currentPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}`}
                     >
                       ← Prev
                     </button>
@@ -245,9 +280,7 @@ const FinancePayouts = () => {
                       onClick={() => setCurrentPage((p) => p + 1)}
                       disabled={currentPage === totalPages || totalPages === 0}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors
-                        ${currentPage === totalPages || totalPages === 0
-                          ? 'bg-slate-100 text-slate-300 border-slate-100 cursor-not-allowed dark:bg-slate-800 dark:text-slate-700 dark:border-slate-800'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700'}`}
+                                                ${(currentPage === totalPages || totalPages === 0) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}`}
                     >
                       Next →
                     </button>

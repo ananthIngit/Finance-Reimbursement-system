@@ -22,14 +22,14 @@ import random # Needed for OTP generation
 
 # Import local modules
 from .utils import send_status_update_email, send_otp_email 
-from .models import Expense, ApprovalLog, Category, RolePermission, Permission, PasswordResetOTP, Role 
+from .models import Expense, ApprovalLog, Category, RolePermission, Permission, PasswordResetOTP, Role, Notification 
 from .permissions import IsManager, IsFinance, IsSystemAdmin 
 from .serializers import (
     UserRegistrationSerializer, ExpenseSerializer, CategorySerializer,
     CustomTokenObtainPairSerializer, UserProfileSerializer,
     ChangeUsernameSerializer, ChangeProfilePicSerializer,
     ChangePasswordSerializer, ExpenseActionSerializer,
-    RoleSerializer, AdminUserListSerializer, AdminUserUpdateSerializer 
+    RoleSerializer, AdminUserListSerializer, AdminUserUpdateSerializer, NotificationSerializer 
 )
 
 User = get_user_model()
@@ -177,6 +177,12 @@ class ApproveRejectView(views.APIView):
             ApprovalLog.objects.create(
                 expense=expense, reviewer=request.user,
                 new_status=action, remarks=remarks
+            )
+            
+            # Create a notification for the employee
+            Notification.objects.create(
+                user=expense.employee,
+                message=f"Your expense for {expense.category.name if expense.category else 'General'} (${expense.amount}) was {action.lower()} by {request.user.username}."
             )
             try:
                 send_status_update_email(expense)
@@ -435,3 +441,33 @@ class AdminStatsView(views.APIView):
             "unassigned_roles": users.filter(role__isnull=True).count(),
             "deactivated": users.filter(is_active=False).count()
         })
+
+# ==========================
+# 8. Notifications
+# ==========================
+
+class NotificationListView(generics.ListAPIView):
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Notification.objects.filter(user=self.request.user).order_by('-created_at')
+
+class MarkNotificationReadView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        try:
+            notification = Notification.objects.get(pk=pk, user=request.user)
+            notification.is_read = True
+            notification.save()
+            return Response({"message": "Notification marked as read"})
+        except Notification.DoesNotExist:
+            return Response({"error": "Notification not found"}, status=404)
+
+class MarkAllNotificationsReadView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request):
+        Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        return Response({"message": "All notifications marked as read"})

@@ -6,7 +6,15 @@ const EmployeeProfile = () => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({ first_name: '', last_name: '' });
+
+  // 🏦 UPDATED: Added Bank Details to formData
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    account_number: '',
+    bank_name: '',
+    ifsc_code: ''
+  });
 
   const fetchProfile = async () => {
     try {
@@ -15,6 +23,10 @@ const EmployeeProfile = () => {
       setFormData({
         first_name: response.data.first_name || '',
         last_name: response.data.last_name || '',
+        // 🏦 Syncing bank details from backend
+        account_number: response.data.account_number || '',
+        bank_name: response.data.bank_name || '',
+        ifsc_code: response.data.ifsc_code || '',
       });
     } catch (error) {
       console.error('Failed to fetch profile', error);
@@ -32,18 +44,21 @@ const EmployeeProfile = () => {
 
   const handleSave = async () => {
     try {
+      // 🏦 Sending all data including bank details to backend
       const response = await api.patch('users/profile/', formData);
-      setProfile((prev) => ({
-        ...prev,
+      setProfile(response.data);
+      setFormData({
         first_name: response.data.first_name,
         last_name: response.data.last_name,
-      }));
-      setFormData({ first_name: response.data.first_name, last_name: response.data.last_name });
+        account_number: response.data.account_number,
+        bank_name: response.data.bank_name,
+        ifsc_code: response.data.ifsc_code
+      });
       setIsEditing(false);
-      alert('Profile updated successfully!');
+      alert('Profile and Bank Details updated successfully!');
     } catch (error) {
       console.error('Update failed', error);
-      alert('Failed to update profile. Please try again.');
+      alert('Failed to update profile. Ensure all fields are valid.');
     }
   };
 
@@ -84,7 +99,13 @@ const EmployeeProfile = () => {
       onEdit={() => setIsEditing(true)}
       onCancel={() => {
         setIsEditing(false);
-        setFormData({ first_name: profile.first_name || '', last_name: profile.last_name || '' });
+        setFormData({
+          first_name: profile.first_name || '',
+          last_name: profile.last_name || '',
+          account_number: profile.account_number || '',
+          bank_name: profile.bank_name || '',
+          ifsc_code: profile.ifsc_code || ''
+        });
       }}
       onSave={handleSave}
       onChange={handleChange}

@@ -45,7 +45,7 @@ const Login = () => {
 
       {/* ── Left Branding Panel ── */}
       <div className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12
-        bg-gradient-to-br from-indigo-700 via-indigo-800 to-indigo-950 relative overflow-hidden">
+          bg-gradient-to-br from-indigo-700 via-indigo-800 to-indigo-950 relative overflow-hidden">
 
         {/* Decorative circles */}
         <div className="absolute top-[-80px] right-[-80px] w-[360px] h-[360px] rounded-full bg-white/5 blur-3xl pointer-events-none" />
@@ -124,8 +124,8 @@ const Login = () => {
           {/* Error */}
           {error && (
             <div className="flex items-start gap-2.5 p-3.5 rounded-lg mb-5 text-sm
-              bg-red-50 text-red-700 border border-red-100
-              dark:bg-red-950/40 dark:text-red-400 dark:border-red-900/50 animate-fade-in">
+                bg-red-50 text-red-700 border border-red-100
+                dark:bg-red-950/40 dark:text-red-400 dark:border-red-900/50 animate-fade-in">
               <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
@@ -147,9 +147,9 @@ const Login = () => {
                 required
                 placeholder="Enter your username"
                 className="w-full px-3.5 py-2.5 text-sm rounded-lg border transition-all duration-200
-                  bg-white border-slate-300 text-slate-900 placeholder-slate-400
-                  dark:bg-slate-800 dark:border-slate-700 dark:text-white dark:placeholder-slate-500
-                  focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    bg-white border-slate-300 text-slate-900 placeholder-slate-400
+                    dark:bg-slate-800 dark:border-slate-700 dark:text-white dark:placeholder-slate-500
+                    focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               />
             </div>
 
@@ -167,9 +167,9 @@ const Login = () => {
                   required
                   placeholder="Enter your password"
                   className="w-full px-3.5 py-2.5 pr-11 text-sm rounded-lg border transition-all duration-200
-                    bg-white border-slate-300 text-slate-900 placeholder-slate-400
-                    dark:bg-slate-800 dark:border-slate-700 dark:text-white dark:placeholder-slate-500
-                    focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      bg-white border-slate-300 text-slate-900 placeholder-slate-400
+                      dark:bg-slate-800 dark:border-slate-700 dark:text-white dark:placeholder-slate-500
+                      focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
                 <button
                   type="button"
@@ -205,9 +205,9 @@ const Login = () => {
               type="submit"
               disabled={loading}
               className="w-full py-2.5 px-4 rounded-lg text-sm font-semibold text-white
-                bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800
-                transition-all duration-200 shadow-sm hover:shadow-md
-                disabled:opacity-60 disabled:cursor-not-allowed mt-1"
+                  bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800
+                  transition-all duration-200 shadow-sm hover:shadow-md
+                  disabled:opacity-60 disabled:cursor-not-allowed mt-1"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -231,6 +231,6 @@ const Login = () => {
       </div>
     </div>
   );
-};
+}
 
 export default Login;

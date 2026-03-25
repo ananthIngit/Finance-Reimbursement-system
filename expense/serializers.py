@@ -2,7 +2,7 @@ import re
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer   
-from .models import Role, Category, Expense, ApprovalLog
+from .models import Role, Category, Expense, ApprovalLog, Notification
 
 User = get_user_model()
 
@@ -229,3 +229,12 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['role', 'manager', 'department', 'is_active']
+
+# ==========================
+# 5. NOTIFICATIONS
+# ==========================
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ['id', 'message', 'is_read', 'created_at']

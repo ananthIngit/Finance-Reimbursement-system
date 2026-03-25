@@ -1,20 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import ThemeToggle from '../ThemeToggle';
+import NotificationBell from "./NotificationBell";
 
 /**
  * AppLayout — wraps all authenticated pages with:
- *   - Collapsible sidebar (role-based nav)
- *   - Sticky glass top bar (sidebar toggle + ThemeToggle)
- *   - Main content area
- *
- * Props:
- *   children  — page content
- *   title     — optional page title shown in top bar
- *   actions   — optional JSX rendered on the right side of the top bar
+ * - Collapsible sidebar (role-based nav)
+ * - Sticky glass top bar (sidebar toggle + ThemeToggle + Notifications)
+ * - Main content area
  */
 const AppLayout = ({ children, title, actions }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const [userRole, setUserRole] = useState('');
+
+  /* Get user role on mount */
+  useEffect(() => {
+    const role = localStorage.getItem('user_role');
+    setUserRole(role);
+  }, []);
 
   /* Auto-collapse on small screens */
   useEffect(() => {
@@ -30,8 +33,8 @@ const AppLayout = ({ children, title, actions }) => {
   const sidebarWidth = collapsed ? 68 : 240;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex">
-      {/* Sidebar */}
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex transition-colors duration-300">
+      {/* Sidebar - Role-based logic lives inside this component */}
       <Sidebar collapsed={collapsed} />
 
       {/* Page shell */}
@@ -58,20 +61,29 @@ const AppLayout = ({ children, title, actions }) => {
 
           {/* Page title */}
           {title && (
-            <h1 className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
+            <h1 className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate hidden sm:block">
               {title}
             </h1>
           )}
 
           {/* Right slot */}
-          <div className="ml-auto flex items-center gap-2.5">
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
             {actions}
+
+            {/* ── Role-Based Guard ── */}
+            {userRole === 'Employee' && (
+              <>
+                <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1 hidden sm:block" />
+                <NotificationBell />
+              </>
+            )}
+
             <ThemeToggle />
           </div>
         </header>
 
         {/* ── Main content ── */}
-        <main className="flex-1 p-6 overflow-x-hidden">
+        <main className="flex-1 p-4 sm:p-6 overflow-x-hidden">
           {children}
         </main>
       </div>

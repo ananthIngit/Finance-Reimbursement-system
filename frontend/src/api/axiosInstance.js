@@ -33,7 +33,42 @@ api.interceptors.response.use(
         return response;
     },
     async (error) => {
-        // If the backend says "401 Unauthorized" (Token expired or invalid)
+        const originalRequest = error.config;
+
+        // If the backend says "401 Unauthorized" (Token expired or invalid) and we haven't retried yet
+        if (error.response && error.response.status === 401 && !originalRequest._retry && originalRequest.url !== 'auth/login/') {
+            originalRequest._retry = true;
+            
+            try {
+                const refreshToken = localStorage.getItem('refresh_token');
+                if (refreshToken) {
+                    // Try to get a new token from the backend
+                    const response = await axios.post('http://127.0.0.1:8000/api/auth/refresh/', { 
+                        refresh: refreshToken 
+                    });
+                    
+                    const newAccessToken = response.data.access;
+                    localStorage.setItem('access_token', newAccessToken);
+                    
+                    if (response.data.refresh) {
+                        localStorage.setItem('refresh_token', response.data.refresh);
+                    }
+                    
+                    // Update the failed request with the new token
+                    originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+                    
+                    // Retry the original request
+                    return api(originalRequest);
+                }
+            } catch (refreshError) {
+                console.error("Token Refresh Failed. Logging out...");
+                localStorage.clear();
+                window.location.href = '/';
+                return Promise.reject(refreshError);
+            }
+        }
+
+        // If it's a 401 and we already retried, or no refresh token exists
         if (error.response && error.response.status === 401) {
             console.error("Token Expired or Invalid. Logging out...");
             
@@ -43,6 +78,7 @@ api.interceptors.response.use(
             // Redirect to Login Page
             window.location.href = '/'; 
         }
+        
         return Promise.reject(error);
     }
 );
