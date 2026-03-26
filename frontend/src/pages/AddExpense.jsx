@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosInstance';
+import { createWorker } from 'tesseract.js';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
+
+import * as pdfjsLib from 'pdfjs-dist';
+// 🔥 THE VITE FIX: Import the worker as a local URL asset
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 const AddExpense = () => {
   const navigate = useNavigate();
@@ -9,6 +15,7 @@ const AddExpense = () => {
   const [receipt, setReceipt] = useState(null);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -23,12 +30,112 @@ const AddExpense = () => {
     fetchCategories();
   }, []);
 
+  const convertPdfToImage = async (file) => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const page = await pdf.getPage(1); // Get the first page
+    const viewport = page.getViewport({ scale: 2 }); // High scale for better OCR accuracy
+
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+
+    await page.render({ canvasContext: context, viewport }).promise;
+    return canvas.toDataURL('image/png'); // Returns the PDF page as a PNG image string
+  };
+
+  const handleOCR = async (file) => {
+    setIsScanning(true);
+    setError('');
+
+    try {
+      let imageSource = file;
+
+      // 🔄 PART A: Handle PDF Conversion
+      if (file.type === 'application/pdf') {
+        console.log("PDF detected. Converting first page to image...");
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2.0 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        await page.render({ canvasContext: context, viewport }).promise;
+        imageSource = canvas.toDataURL('image/png');
+      }
+
+      // 🧠 PART B: Run Tesseract AI
+      const worker = await createWorker('eng');
+      const { data: { text } } = await worker.recognize(imageSource);
+      console.log("AI Scanned Raw Text:\n", text); // F12 to see this!
+
+      // 📝 NEW: Extract Description (Title)
+      // Looks for "Description: X" OR just grabs the very first line of the receipt
+      const descMatch = text.match(/Description\s*:\s*(.+)/i);
+      if (descMatch && descMatch[1]) {
+        setFormData(prev => ({ ...prev, title: descMatch[1].trim() }));
+      } else {
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 2);
+        if (lines.length > 0) {
+          // Grab the first readable line as a fallback description
+          setFormData(prev => ({ ...prev, title: lines[0].substring(0, 40) }));
+        }
+      }
+
+      // 🔍 SMARTER: Extract Amount (Catches 2000, 2,000, 145.50, etc.)
+      // This grabs anything that looks like a number, even with commas
+      const amountMatches = text.match(/\d+(?:[.,]\d+)?/g);
+      if (amountMatches) {
+        // Convert to real numbers and filter out zeros/NaNs
+        const validNumbers = amountMatches
+          .map(numStr => parseFloat(numStr.replace(/,/g, '')))
+          .filter(num => !isNaN(num) && num > 0);
+
+        if (validNumbers.length > 0) {
+          // Assume the largest number on the receipt is the Total
+          const maxAmount = Math.max(...validNumbers);
+          setFormData(prev => ({ ...prev, amount: maxAmount.toString() }));
+        }
+      }
+
+      // 📂 PART D: Suggest Category based on Keywords
+      const lowerText = text.toLowerCase();
+      let suggestedCatId = '';
+
+      if (lowerText.includes('uber') || lowerText.includes('taxi') || lowerText.includes('fuel') || lowerText.includes('travel') || lowerText.includes('flight')) {
+        suggestedCatId = categories.find(c => c.name.toLowerCase().includes('travel'))?.id;
+      } else if (lowerText.includes('food') || lowerText.includes('restaurant') || lowerText.includes('cafe') || lowerText.includes('starbucks')) {
+        suggestedCatId = categories.find(c => c.name.toLowerCase().includes('food'))?.id;
+      }
+
+      if (suggestedCatId) {
+        setFormData(prev => ({ ...prev, category: suggestedCatId }));
+      }
+
+      await worker.terminate();
+    } catch (err) {
+      console.error("OCR Processing Error:", err);
+      setError("AI was unable to read this file. Please enter details manually.");
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleFileChange = (e) => {
-    setReceipt(e.target.files[0]);
+    const file = e.target.files[0];
+    setReceipt(file);
+
+    // 🚀 Trigger the AI scan if it's an image OR a PDF
+    if (file && (file.type.startsWith('image/') || file.type === 'application/pdf')) {
+      handleOCR(file);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -89,15 +196,15 @@ const AddExpense = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            
+
             {/* Description */}
             <div className="relative group">
               <input
                 type="text" id="title" name="title" value={formData.title} onChange={handleChange} required placeholder=" "
                 className="peer w-full px-5 pt-7 pb-3 text-base font-semibold text-slate-900 bg-white/50 dark:bg-slate-900/50 dark:text-white border-2 border-slate-200 dark:border-slate-700 rounded-2xl outline-none transition-all duration-300 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 focus:shadow-[0_8px_20px_-6px_rgba(99,102,241,0.2)]"
               />
-              <label 
-                htmlFor="title" 
+              <label
+                htmlFor="title"
                 className="absolute left-5 top-5 text-slate-500 dark:text-slate-400 text-base font-medium transition-all duration-300 pointer-events-none 
                 peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-indigo-600 dark:peer-focus:text-indigo-400
                 peer-[:not(:placeholder-shown)]:-translate-y-3 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:text-indigo-600 dark:peer-[:not(:placeholder-shown)]:text-indigo-400"
@@ -116,8 +223,8 @@ const AddExpense = () => {
                   type="number" id="amount" name="amount" value={formData.amount} onChange={handleChange} required min="0.01" step="0.01" placeholder=" "
                   className="peer w-full pl-10 pr-5 pt-7 pb-3 text-base font-semibold text-slate-900 bg-white/50 dark:bg-slate-900/50 dark:text-white border-2 border-slate-200 dark:border-slate-700 rounded-2xl outline-none transition-all duration-300 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 focus:shadow-[0_8px_20px_-6px_rgba(99,102,241,0.2)]"
                 />
-                <label 
-                  htmlFor="amount" 
+                <label
+                  htmlFor="amount"
                   className="absolute left-10 top-5 text-slate-500 dark:text-slate-400 text-base font-medium transition-all duration-300 pointer-events-none 
                   peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-indigo-600 dark:peer-focus:text-indigo-400
                   peer-[:not(:placeholder-shown)]:-translate-y-3 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:text-indigo-600 dark:peer-[:not(:placeholder-shown)]:text-indigo-400"
@@ -142,8 +249,8 @@ const AddExpense = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                   </svg>
                 </div>
-                <label 
-                  htmlFor="category" 
+                <label
+                  htmlFor="category"
                   className="absolute left-5 top-2 text-indigo-600 dark:text-indigo-400 text-xs font-bold transition-all duration-300 pointer-events-none uppercase tracking-wider"
                 >
                   Category <span className="text-red-400">*</span>
@@ -157,8 +264,17 @@ const AddExpense = () => {
                 Receipt Attachment
               </label>
               <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed rounded-2xl cursor-pointer
-                border-indigo-300/50 bg-indigo-50/50 hover:bg-indigo-100/50 dark:border-indigo-700/50 dark:bg-indigo-900/10 dark:hover:bg-indigo-900/30
-                transition-all duration-300 group shadow-inner">
+    border-indigo-300/50 bg-indigo-50/50 hover:bg-indigo-100/50 dark:border-indigo-700/50 dark:bg-indigo-900/10 dark:hover:bg-indigo-900/30
+    transition-all duration-300 group shadow-inner relative overflow-hidden">
+
+                {/* 🚀 ADDED: Scanning Overlay */}
+                {isScanning && (
+                  <div className="absolute inset-0 bg-indigo-600/10 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center animate-pulse">
+                    <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-2"></div>
+                    <p className="text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-tighter">AI Scanning Receipt...</p>
+                  </div>
+                )}
+
                 <div className="text-center transition-transform duration-300 group-hover:-translate-y-1">
                   {receipt ? (
                     <>
@@ -180,7 +296,7 @@ const AddExpense = () => {
                       <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
                         <span className="font-bold text-indigo-600 dark:text-indigo-400">Click to upload</span> or drag & drop
                       </p>
-                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">PDF, PNG, JPG up to 10MB</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 italic tracking-tight">AI will auto-fill amount & category</p>
                     </>
                   )}
                 </div>
@@ -190,6 +306,7 @@ const AddExpense = () => {
                   name="receipt"
                   accept="image/*,application/pdf"
                   onChange={handleFileChange}
+                  disabled={isScanning} // Prevent double uploads while scanning
                 />
               </label>
             </div>
@@ -224,7 +341,7 @@ const AddExpense = () => {
                   </span>
                 )}
               </button>
-              
+
               <button
                 type="button"
                 onClick={() => navigate('/my-expenses')}
